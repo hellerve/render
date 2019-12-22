@@ -1,0 +1,39 @@
+(load "https://github.com/hellerve/anima.carp@master")
+(load "Vector.carp")
+
+(deftype Color [
+  inner (Vector3 Int)
+])
+
+(defmodule Color
+  (defn rgb [r g b]
+    (init (Vector3.init r g b)))
+
+  (defn red [c]
+    @(Vector3.x c))
+
+  (defn green [c]
+    @(Vector3.y c))
+
+  (defn blue [c]
+    @(Vector3.z c))
+
+  (defn add [a b]
+    (init (Vector3.add a b)))
+
+  (defn mul [c x]
+    (init (Vector3.mul c x)))
+)
+
+(defmodule Raytracer
+  (defn trace [name w h]
+    (let [app (SDLApp.create name w h)
+          rend @(SDLApp.renderer &app)
+          seed (Double.from-long (System.nanotime))]
+      (do
+        (Random.seed-from seed)
+        (for (x 0 w)
+          (for (y 0 h)
+            (Anima.point rend x y)))
+        (Anima.save &app rend w h (str* name (fmt "%.0f" seed) ".bmp")))))
+)
