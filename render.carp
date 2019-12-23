@@ -35,6 +35,7 @@
   center (Vector3 Double)
   radius Double
   color Color
+  specular Double
 ])
 
 (deftype Light
@@ -73,21 +74,29 @@
               t2 (/ (- (neg k2) (sqrt discriminant)) (* 2.0 k1))]
           (Pair.init t1 t2)))))
 
-  (defn new-i [l n i]
+  (defn new-i [l n i v s]
     (let [ndl (Vector3.dot n l)]
-      (if (> ndl 0.0)
-        (/ (* i ndl) (* (Vector3.mag n) (Vector3.mag l)))
-        0.0)))
+      (+
+        (if (> ndl 0.0)
+          (/ (* i ndl) (* (Vector3.mag n) (Vector3.mag l)))
+          0.0)
+        (if (/= s -1.0)
+          (let [r (Vector3.sub &(Vector3.mul &(Vector3.mul n (Vector3.dot n l)) 2.0) l)
+                rdv (Vector3.dot &r v)]
+            (if (> rdv 0.0)
+              (* i (Double.pow (/ rdv (* (Vector3.mag &r) (Vector3.mag v))) s))
+              0.0))
+          0.0))))
 
-  (defn lighting [scene p n]
+  (defn lighting [scene p n v s]
     (Array.reduce &(fn [i light]
       (+ i
         (match @light
           (Light.Ambient intensity) intensity
           (Light.Point intensity position)
-            (new-i &(Vector3.sub &position p) n intensity)
+            (new-i &(Vector3.sub &position p) n intensity v s)
           (Light.Directional intensity direction)
-            (new-i &direction n intensity))))
+            (new-i &direction n intensity v s))))
       0.0 (lights scene)))
 
   (defn trace-ray [scene o d tmin tmax]
@@ -112,7 +121,9 @@
                   &(Maybe.from (Maybe.apply @&closest-sphere (fn [c] @(Sphere.center &c))) @o))]
         (Maybe.from
           (Maybe.apply closest-sphere (fn [c]
-            (Color.mul (Sphere.color &c) (lighting scene &p &(Vector3.div &n (Vector3.mag &n))))))
+            (Color.mul
+              (Sphere.color &c)
+              (lighting scene &p &(Vector3.div &n (Vector3.mag &n)) &(Vector3.neg d) @(Sphere.specular &c)))))
           @(background-color scene)))))
 
   (defn trace [scene name w h]
@@ -122,12 +133,15 @@
       (do
         (ignore (File.write &f &(fmt "P3\n%d %d\n255\n" w h)))
         (for [y hh (neg hh) -1]
-          (for [x hw (neg hw) -1]
+          (for [x (neg hw) hw]
             (let-do [d (canvas-to-viewport x y w h)
                      c (trace-ray scene &o &d 1.0 inf)]
               (ignore
                 (File.write &f
-                  &(fmt "%d %d %d\n" (Color.red &c) (Color.green &c) (Color.blue &c))))
+                  &(fmt "%d %d %d\n"
+                    (Int.min 255 (Color.red &c))
+                    (Int.min 255 (Color.green &c))
+                    (Int.min 255 (Color.blue &c)))))
               )))
         (File.close f))))
 )
