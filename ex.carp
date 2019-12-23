@@ -5,9 +5,10 @@
       (Sphere.init
         (Vector3.init 0.0 -1.0 3.0)
         1.0
-        (Color.rgb 255 0 0)
+        (Color.rgb 255 255 255)
         500.0
-        0.2
+        0.9
+        0.15
       )
       (Sphere.init
         (Vector3.init 2.0 0.0 4.0)
@@ -15,6 +16,7 @@
         (Color.rgb 0 0 255)
         500.0
         0.3
+        1.0
       )
       (Sphere.init
         (Vector3.init -2.0 0.0 4.0)
@@ -22,6 +24,7 @@
         (Color.rgb 0 255 0)
         10.0
         0.4
+        1.0
       )
       (Sphere.init
         (Vector3.init 0.0 -5001.0 0.0)
@@ -29,6 +32,7 @@
         (Color.rgb 255 255 0)
         1000.0
         0.5
+        1.0
       )
     ]
     [
@@ -37,6 +41,7 @@
       (Light.Directional 0.2 (Vector3.init 1.0 4.0 4.0))
     ]
     (Color.rgb 0 0 0)
+    (Camera.origin)
   )
 )
 

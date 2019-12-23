@@ -37,6 +37,7 @@
   color Color
   specular Double
   reflect Double
+  opacity Double
 ])
 
 (deftype Light
@@ -45,15 +46,30 @@
   (Directional [Double (Vector3 Double)])
 )
 
+(deftype Camera [
+  position (Vector3 Double)
+  rotation (Vector3 (Vector3 Double))
+])
+
+(defmodule Camera
+  (defn origin []
+    (Camera.init
+      (Vector3.init 0.0 0.0 0.0)
+      (Vector3.init
+        (Vector3.init 1.0 0.0 0.0)
+        (Vector3.init 0.0 1.0 0.0)
+        (Vector3.init 0.0 0.0 1.0))))
+)
+
 (deftype Raytracer [
   spheres (Array Sphere)
   lights (Array Light)
   background-color Color
+  camera Camera
 ])
 
 (defmodule Raytracer
   (def d 1.0)
-  (def o (Vector3.init 0.0 0.0 0.0))
   (def inf Double.MAX)
   (def recursion-depth 5)
 
@@ -149,8 +165,37 @@
             (if (or (<= depth 0) (<= refl 0.0))
               color
               (let [ray (reflect &(Vector3.neg d) &n)
-                    reflected (trace-ray scene &p &ray 0.001 tmax (dec depth))]
-                (Color.add &(Color.mul &color (- 1.0 refl)) &(Color.mul &reflected refl))))))))
+                    reflected (trace-ray scene &p &ray 0.001 tmax (dec depth))
+                    new-color (Color.add &(Color.mul &color (- 1.0 refl))
+                                         &(Color.mul &reflected refl))
+                    opacity @(Sphere.opacity &sphere)]
+                (if (or (<= depth 0) (>= opacity 1.0))
+                  new-color
+                  (let [passed-through (trace-ray scene &p d 0.001 tmax (dec depth))]
+                    (Color.add &(Color.mul &new-color opacity)
+                               &(Color.mul &passed-through (- 1.0 opacity)))))))))))
+
+  (defn rotate [cam vp]
+    (let [r1 (Vector3.x cam)
+          r2 (Vector3.y cam)
+          r3 (Vector3.z cam)]
+      (Vector3.init
+        (+
+          (* @(Vector3.x r1) @(Vector3.x vp))
+          (+ (* @(Vector3.x r2) @(Vector3.y vp))
+             (* @(Vector3.x r3) @(Vector3.z vp))))
+        (+
+          (* @(Vector3.y r1) @(Vector3.x vp))
+          (+ (* @(Vector3.y r2) @(Vector3.y vp))
+             (* @(Vector3.y r3) @(Vector3.z vp))))
+        (+
+          (* @(Vector3.z r1) @(Vector3.x vp))
+          (+ (* @(Vector3.z r2) @(Vector3.y vp))
+             (* @(Vector3.z r3) @(Vector3.z vp))))
+      )
+    )
+  )
+
 
   (defn trace [scene name w h]
     (let [f (Result.unsafe-from-success (File.open-with &(str* name ".ppm") "wb+"))
@@ -160,8 +205,9 @@
         (ignore (File.write &f &(fmt "P3\n%d %d\n255\n" w h)))
         (for [y hh (neg hh) -1]
           (for [x (neg hw) hw]
-            (let-do [d (canvas-to-viewport x y w h)
-                     c (trace-ray scene &o &d 1.0 inf recursion-depth)]
+            (let-do [cam (camera scene)
+                     d (rotate (Camera.rotation cam) &(canvas-to-viewport x y w h))
+                     c (trace-ray scene (Camera.position cam) &d 1.0 inf recursion-depth)]
               (ignore
                 (File.write &f
                   &(fmt "%d %d %d\n"
