@@ -1,5 +1,6 @@
-(load "https://github.com/hellerve/anima.carp@master")
 (load "Vector.carp")
+
+(load "https://github.com/carpentry-org/file@0.0.5")
 
 (defmodule Double
   (register MAX Double "DBL_MAX")
@@ -24,10 +25,10 @@
     @(Vector3.z (inner c)))
 
   (defn add [a b]
-    (init (Vector3.add a b)))
+    (init (Vector3.add (inner a) (inner b))))
 
   (defn mul [c x]
-    (init (Vector3.mul c x)))
+    (init (Vector3.map (fn [e] (to-int (* (from-int e) x))) (inner c))))
 )
 
 (deftype Sphere [
@@ -36,8 +37,15 @@
   color Color
 ])
 
+(deftype Light
+  (Ambient [Double])
+  (Point [Double (Vector3 Double)])
+  (Directional [Double (Vector3 Double)])
+)
+
 (deftype Raytracer [
   spheres (Array Sphere)
+  lights (Array Light)
   background-color Color
 ])
 
@@ -65,6 +73,22 @@
               t2 (/ (- (neg k2) (sqrt discriminant)) (* 2.0 k1))]
           (Pair.init t1 t2)))))
 
+  (defn new-i [l n i]
+    (let [ndl (Vector3.dot n l)]
+      (if (> ndl 0.0)
+        (/ (* i ndl) (* (Vector3.mag n) (Vector3.mag l)))
+        0.0)))
+
+  (defn lighting [scene p n]
+    (Array.reduce &(fn [i light]
+      (+ i
+        (match @light
+          (Light.Ambient intensity) intensity
+          (Light.Point intensity position)
+            (new-i &(Vector3.sub &position p) n intensity)
+          (Light.Directional intensity direction)
+            (new-i &direction n intensity))))
+      0.0 (lights scene)))
 
   (defn trace-ray [scene o d tmin tmax]
     (let-do [closest inf
@@ -74,32 +98,36 @@
               t1 @(Pair.a &t)
               t2 @(Pair.b &t)]
           (cond
-            (and (between t1 tmin tmax) (< t1 closest))
-              (do
-                (set! closest t1)
-                (set! closest-sphere (Maybe.Just @sphere)))
             (and (between t2 tmin tmax) (< t2 closest))
               (do
                 (set! closest t2)
                 (set! closest-sphere (Maybe.Just @sphere)))
+            (and (between t1 tmin tmax) (< t1 closest))
+              (do
+                (set! closest t1)
+                (set! closest-sphere (Maybe.Just @sphere)))
             ())))
-      (Maybe.from
-        (Maybe.apply closest-sphere (fn [c] @(Sphere.color &c)))
-        @(background-color scene))))
+      (let [p (Vector3.add o &(Vector3.mul d closest))
+            n (Vector3.sub &p
+                  &(Maybe.from (Maybe.apply @&closest-sphere (fn [c] @(Sphere.center &c))) @o))]
+        (Maybe.from
+          (Maybe.apply closest-sphere (fn [c]
+            (Color.mul (Sphere.color &c) (lighting scene &p &(Vector3.div &n (Vector3.mag &n))))))
+          @(background-color scene)))))
 
   (defn trace [scene name w h]
-    (let [app (SDLApp.create name w h)
-          rend @(SDLApp.renderer &app)
-          seed (Double.from-long (System.nanotime))
+    (let [f (Result.unsafe-from-success (File.open-with &(str* name ".ppm") "wb+"))
           hw (/ w 2)
           hh (/ h 2)]
       (do
-        (Random.seed-from seed)
-        (for [x (neg hw) hw]
-          (for [y (neg hh) hh]
+        (ignore (File.write &f &(fmt "P3\n%d %d\n255\n" w h)))
+        (for [y hh (neg hh) -1]
+          (for [x hw (neg hw) -1]
             (let-do [d (canvas-to-viewport x y w h)
                      c (trace-ray scene &o &d 1.0 inf)]
-              (Anima.set-color rend (Color.red &c) (Color.green &c) (Color.blue &c) 255)
-              (Anima.point rend (+ x hw) (dec (- hh y))))))
-        (Anima.save &app rend w h (str* name ".bmp")))))
+              (ignore
+                (File.write &f
+                  &(fmt "%d %d %d\n" (Color.red &c) (Color.green &c) (Color.blue &c))))
+              )))
+        (File.close f))))
 )

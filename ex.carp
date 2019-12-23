@@ -17,10 +17,20 @@
         1.0
         (Color.rgb 0 255 0)
       )
+      (Sphere.init
+        (Vector3.init 0.0 -5001.0 0.0)
+        5000.0
+        (Color.rgb 255 255 0)
+      )
+    ]
+    [
+      (Light.Ambient 0.2)
+      (Light.Point 0.6 (Vector3.init 2.0 1.0 0.0))
+      (Light.Directional 0.2 (Vector3.init 1.0 4.0 4.0))
     ]
     (Color.rgb 255 255 255)
   )
 )
 
 (defn main []
-  (Raytracer.trace &r "example/ex1" 600 600))
+  (Raytracer.trace &r "./ex1" 600 600))
