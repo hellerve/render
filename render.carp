@@ -36,6 +36,7 @@
   radius Double
   color Color
   specular Double
+  reflect Double
 ])
 
 (deftype Light
@@ -54,9 +55,13 @@
   (def d 1.0)
   (def o (Vector3.init 0.0 0.0 0.0))
   (def inf Double.MAX)
+  (def recursion-depth 5)
 
   (defn canvas-to-viewport [x y w h]
     (Vector3.init (/ (from-int x) (from-int w)) (/ (from-int y) (from-int h)) d))
+
+  (defn reflect [r n]
+    (Vector3.sub &(Vector3.mul n (* 2.0 (Vector3.dot n r))) r))
 
   (defn intersect-ray-sphere [o d sphere]
     (let [c (Sphere.center sphere)
@@ -108,7 +113,7 @@
               (/ (* i ndl) (* (Vector3.mag n) (Vector3.mag l)))
               0.0)
             (if (/= s -1.0)
-              (let [r (Vector3.sub &(Vector3.mul &(Vector3.mul n (Vector3.dot n l)) 2.0) l)
+              (let [r (reflect l n)
                     rdv (Vector3.dot &r v)]
                 (if (> rdv 0.0)
                   (* i (Double.pow (/ rdv (* (Vector3.mag &r) (Vector3.mag v))) s))
@@ -126,19 +131,26 @@
             (new-i scene p &direction n intensity v s tmax))))
       0.0 (lights scene)))
 
-  (defn trace-ray [scene o d tmin tmax]
-    (let-do [r (closest-intersection scene o d tmin tmax)
-             closest @(IntersectionResult.closest &r)
-             closest-sphere @(IntersectionResult.closest-sphere &r)]
-      (let [p (Vector3.add o &(Vector3.mul d closest))
-            n (Vector3.sub &p
-                  &(Maybe.from (Maybe.apply @&closest-sphere (fn [c] @(Sphere.center &c))) @o))]
-        (Maybe.from
-          (Maybe.apply closest-sphere (fn [c]
-            (Color.mul
-              (Sphere.color &c)
-              (lighting scene &p &(Vector3.div &n (Vector3.mag &n)) &(Vector3.neg d) @(Sphere.specular &c) tmax))))
-          @(background-color scene)))))
+  (defn trace-ray [scene o d tmin tmax depth]
+    (let [r (closest-intersection scene o d tmin tmax)
+          closest @(IntersectionResult.closest &r)
+          closest-sphere @(IntersectionResult.closest-sphere &r)]
+      (match closest-sphere
+        (Maybe.Nothing) @(background-color scene)
+        (Maybe.Just sphere)
+          (let [p (Vector3.add o &(Vector3.mul d closest))
+                n- (Vector3.sub &p (Sphere.center &sphere))
+                n (Vector3.normalize &n-)
+                color (Color.mul
+                        (Sphere.color &sphere)
+                        (lighting scene &p &n
+                                        &(Vector3.neg d) @(Sphere.specular &sphere) tmax))
+                refl @(Sphere.reflect &sphere)]
+            (if (or (<= depth 0) (<= refl 0.0))
+              color
+              (let [ray (reflect &(Vector3.neg d) &n)
+                    reflected (trace-ray scene &p &ray 0.001 tmax (dec depth))]
+                (Color.add &(Color.mul &color (- 1.0 refl)) &(Color.mul &reflected refl))))))))
 
   (defn trace [scene name w h]
     (let [f (Result.unsafe-from-success (File.open-with &(str* name ".ppm") "wb+"))
@@ -149,7 +161,7 @@
         (for [y hh (neg hh) -1]
           (for [x (neg hw) hw]
             (let-do [d (canvas-to-viewport x y w h)
-                     c (trace-ray scene &o &d 1.0 inf)]
+                     c (trace-ray scene &o &d 1.0 inf recursion-depth)]
               (ignore
                 (File.write &f
                   &(fmt "%d %d %d\n"
