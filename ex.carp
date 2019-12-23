@@ -1,0 +1,26 @@
+(load "render.carp")
+
+(def r
+  (Raytracer.init [
+      (Sphere.init
+        (Vector3.init 0.0 -1.0 3.0)
+        1.0
+        (Color.rgb 255 0 0)
+      )
+      (Sphere.init
+        (Vector3.init 2.0 0.0 4.0)
+        1.0
+        (Color.rgb 0 0 255)
+      )
+      (Sphere.init
+        (Vector3.init -2.0 0.0 4.0)
+        1.0
+        (Color.rgb 0 255 0)
+      )
+    ]
+    (Color.rgb 255 255 255)
+  )
+)
+
+(defn main []
+  (Raytracer.trace &r "example/ex1" 600 600))
