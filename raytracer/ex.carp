@@ -1,5 +1,7 @@
 (load "render.carp")
 
+(add-cflag "-O3 -flto -march=native")
+
 (def r
   (Raytracer.init [
       (Sphere.init
