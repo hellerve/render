@@ -1,6 +1,6 @@
 (load "render.carp")
 
-(add-cflag "-O3 -flto -march=native")
+(add-cflag "-O3 -flto -march=native -fomit-frame-pointer")
 
 (def r
   (Raytracer.init [
